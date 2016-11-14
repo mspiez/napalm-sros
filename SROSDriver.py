@@ -1,8 +1,10 @@
 #!/usr/bin/env python
 
-import paramiko
+import os
 import re
+import paramiko
 import time
+
 from scp import SCPClient
 
 class SROSDriver(object):
@@ -23,7 +25,7 @@ class SROSDriver(object):
                             port=self.port,
                             username=self.username,
                             password=self.password
-                                            )
+                            )
         self.device = self.ssh.invoke_shell()
     def close(self):
         self.ssh.close()
@@ -32,6 +34,13 @@ class SROSDriver(object):
         time.sleep(1)
         return self.device.recv(65535)
     def scp_file_put(self, source_file, dest_file):
+        self.ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
+        self.ssh.connect(
+                            hostname=self.hostname,
+                            port=self.port,
+                            username=self.username,
+                            password=self.password
+                            )
         scp = SCPClient(self.ssh.get_transport())
         scp.put(source_file, dest_file)
     def scp_file_get(self, dest_file):
@@ -111,4 +120,72 @@ class SROSDriver(object):
             'uptime': uptime,
             'interface': self.get_interfaces().keys()
             }
-
+    def check_file_exists(self, dest_file):
+        self.device.send("\n/environment no more\n")
+        time.sleep(1)
+        self.device.send('file dir {}\n'.format(dest_file))
+        time.sleep(1)
+        output = self.device.recv(65535)
+        if 'CLI File Not Found' in output:
+            return False
+        else:
+            return True
+    def delete_file(self, dest_file):
+        self.device.send("\n/environment no more\n")
+        self.device.send('file delete {}\n'.format(dest_file))
+        time.sleep(1)
+        self.device.send('y')
+        time.sleep(1)
+        output = self.device.recv(65535)
+        if 'OK' in output:
+            return True
+            return output
+        else:
+            return False
+            return output
+    def check_free_space(self, source_file):
+        self.device.send("\n/environment no more\n")
+        time.sleep(1)
+        self.device.send('file dir\n')
+        time.sleep(1)
+        output = self.device.recv(65535)
+        free_space = re.search('(\d+) bytes free', output)
+        if free_space:
+            free_space = free_space.group(1)
+            file_size = os.stat(source_file).st_size
+            if free_space > file_size:
+                return True
+            else:
+                return False
+        else:
+            return False
+    def rollback_save(self):
+        self.device.send("\n/environment no more\n")
+        time.sleep(1)
+        self.device.send('admin rollback save\n')
+        time.sleep(1)
+        output = self.device.recv(65535)
+        if 'OK' in output:
+            return True
+        else:
+            return False
+    def rollback_view(self):
+        self.device.send("\n/environment no more\n")
+        time.sleep(1)
+        self.device.send('admin rollback view\n')
+        time.sleep(1)
+        output = self.device.recv(65535)
+        return output
+    def rollback_compare(self, rollback_id):
+        self.device.send("\n/environment no more\n")
+        time.sleep(1)
+        self.device.send('admin rollback compare {} to active-cfg\n'.format(rollback_id))
+        time.sleep(1)
+        output = self.device.recv(65535)
+        return output
+    def exec_file(self, dest_file):
+        self.device.send("exec {}\n".format(dest_file))
+        time.sleep(1)
+        output = self.device.recv(65535)
+        return output
+    
