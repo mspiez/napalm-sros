@@ -18,6 +18,7 @@ class SROSDriver(object):
         self.port = optional_args.get('port', 22)
         self.ssh = paramiko.SSHClient()
         self.device = None
+
     def open(self):
         self.ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
         self.ssh.connect(
@@ -27,12 +28,15 @@ class SROSDriver(object):
                             password=self.password
                             )
         self.device = self.ssh.invoke_shell()
+
     def close(self):
         self.ssh.close()
+
     def command(self, cmd):
         self.device.send(cmd)
         time.sleep(1)
         return self.device.recv(65535)
+
     def scp_file_put(self, source_file, dest_file):
         self.ssh.set_missing_host_key_policy(paramiko.AutoAddPolicy())
         self.ssh.connect(
@@ -43,9 +47,11 @@ class SROSDriver(object):
                             )
         scp = SCPClient(self.ssh.get_transport())
         scp.put(source_file, dest_file)
+
     def scp_file_get(self, dest_file):
         scp = SCPClient(self.ssh.get_transport())
         scp.get(dest_file)
+
     def get_interfaces(self):
         self.device.send('\n/environment no more\n')
         time.sleep(1)
@@ -85,6 +91,7 @@ class SROSDriver(object):
                                 }
                             })
         return interface_facts
+
     def get_facts(self):
         sys_name = "/show system information | match \"System Name\"\n"
         sys_type = "/show system information | match \"System Type\"\n"
@@ -111,7 +118,7 @@ class SROSDriver(object):
         except AttributeError:
             uptime = ''
         return {
-            'vendor': u'Nokia',
+            'vendor': 'Nokia',
             'model': model,
             'serial_number': serial_number,
             'os_version': os_version,
@@ -120,6 +127,37 @@ class SROSDriver(object):
             'uptime': uptime,
             'interface': self.get_interfaces().keys()
             }
+
+    def get_arp_table(self):
+        self.device.send("/environment no more\n")
+        self.device.send("/show router arp\n")
+        output = self.device.recv(65535)
+        arp_output = output.splitlines()
+        arp_table = []
+        for arp_entry in arp_output:
+            arp_search = re.search(^(\d+.\d+.\d+.\d+)\s+(\S+)\s+(\S+) \
+                            \s+(\S+)\s+(.*), arp_entry)
+            try:
+                ip = arp_search.group(1)
+                mac = arp_search.group(2)
+                age = float(arp_search.group(3))
+                iface = arp_search.group(5)
+            except Exception as f:
+                pass
+            else:
+                arp_table.append({'mac': mac,
+                                  'ip': ip,
+                                  'interface': iface,
+                                  'age': age})
+        return arp_table
+
+    def get_bgp_config(self, group='', neighbor=''):
+        self.device.send("/environment no more\n")
+        self.device.send("/show router bgo neighbor\n")
+        output = self.device.recv(65535)
+        group
+
+
     def check_file_exists(self, dest_file):
         self.device.send("\n/environment no more\n")
         time.sleep(1)
@@ -130,6 +168,7 @@ class SROSDriver(object):
             return False
         else:
             return True
+
     def delete_file(self, dest_file):
         self.device.send("\n/environment no more\n")
         self.device.send('file delete {}\n'.format(dest_file))
@@ -139,10 +178,9 @@ class SROSDriver(object):
         output = self.device.recv(65535)
         if 'OK' in output:
             return True
-            return output
         else:
             return False
-            return output
+
     def check_free_space(self, source_file):
         self.device.send("\n/environment no more\n")
         time.sleep(1)
@@ -159,6 +197,7 @@ class SROSDriver(object):
                 return False
         else:
             return False
+
     def rollback_save(self):
         self.device.send("\n/environment no more\n")
         time.sleep(1)
@@ -169,6 +208,7 @@ class SROSDriver(object):
             return True
         else:
             return False
+
     def rollback_view(self):
         self.device.send("\n/environment no more\n")
         time.sleep(1)
@@ -176,6 +216,7 @@ class SROSDriver(object):
         time.sleep(1)
         output = self.device.recv(65535)
         return output
+
     def rollback_compare(self, rollback_id):
         self.device.send("\n/environment no more\n")
         time.sleep(1)
@@ -183,9 +224,20 @@ class SROSDriver(object):
         time.sleep(1)
         output = self.device.recv(65535)
         return output
+
     def exec_file(self, dest_file):
         self.device.send("exec {}\n".format(dest_file))
-        time.sleep(1)
-        output = self.device.recv(65535)
+        output = ''
+        endTime = datetime.datetime.now() + datetime.timedelta(seconds=60)
+        while True:
+            data = self.device.recv(2000)
+            if datetime.datetime.now() >= endTime and output == '':
+                break
+            elif "failed" in data or 'Executed' in data:
+                output += data
+                break
+            else:
+                output += data
         return output
+
     
