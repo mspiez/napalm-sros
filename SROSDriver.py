@@ -135,8 +135,8 @@ class SROSDriver(object):
         arp_output = output.splitlines()
         arp_table = []
         for arp_entry in arp_output:
-            arp_search = re.search(^(\d+.\d+.\d+.\d+)\s+(\S+)\s+(\S+) \
-                            \s+(\S+)\s+(.*), arp_entry)
+            arp_search = re.search('^(\d+.\d+.\d+.\d+)\s+(\S+)\s+(\S+)' \
+                            '\s+(\S+)\s+(.*)', arp_entry)
             try:
                 ip = arp_search.group(1)
                 mac = arp_search.group(2)
@@ -151,12 +151,131 @@ class SROSDriver(object):
                                   'age': age})
         return arp_table
 
-    def get_bgp_config(self, group='', neighbor=''):
-        self.device.send("/environment no more\n")
-        self.device.send("/show router bgo neighbor\n")
-        output = self.device.recv(65535)
-        group
+    # def get_bgp_config(self, group='', neighbor=''):
+    #     self.device.send("/environment no more\n")
+    #     self.device.send("/show router bgp group\n")
+    #     output = self.device.recv(65535)
+    #     bgp_peers_parms = _get_single_bgp_neighbor(output)
+    #     for bgp_peer in bgp_peers_parms:
 
+
+    def _bgp_neighgbors_parms(self, neighbors_list):
+        bgp_neighbors_parms = {}
+        for neighgbor in neighbors_list:
+            r_neighbor = self._search_func('Peer\s+:\s(\d+.\d+.\d+.\d+)',
+                                                neighgbor, '')
+            desc = self._search_func('Description\s+:\s(.*)', neighgbor, '')
+            im_pol = self._search_func('Import Policy\s+:\s(.*)', neighgbor, '')
+            ex_pol = self._search_func('Export Policy\s+:\s(.*)', neighgbor, '')
+            loc_add = self._search_func('Local Address\s+:\s(\d+.\d+.\d+.\d+)',
+                                                neighgbor, '')
+            loc_as = self._search_func('Local AS\s+:\s(\S+)', neighgbor, int)
+            peer_as = self._search_func('Peer AS\s+:\s(\S+)', neighgbor, int)
+            auth = self._search_func('Auth key chain\s+:\s(\S+)', neighgbor, '')
+            prefix_l = self._search_func('Prefix Limit\s+:\s(\S+)', neighgbor, dict)
+            rr_client = self._search_func('Cluster Id\s+:\s(\d+.\d+.\d+.\d+)',
+                                                neighgbor, False)
+            if rr_client:
+                rr_client = True
+            nhs = self._search_func('Next Hop Self\s+:\s(Enabled)', neighgbor, False)
+            if nhs:
+                nhs = True
+            bgp_neighbors_parms[r_neighbor] = {
+                'description': desc,
+                'import_policy': im_pol,
+                'export_policy': ex_pol,
+                'local_address': loc_add,
+                'local_as': loc_as,
+                'remote_as': peer_as,
+                'authentication_key': auth,
+                'prefix_limit': prefix_l,
+                'route_reflector_client': rr_client,
+                'nhs': nhs}
+        return bgp_neighbors_parms
+
+    def _get_bgp_neighbors_section(self, bgp_response):
+        neighbors = re.findall('^Peer\s+:\s(\d+.\d+.\d+.\d+)',
+                               bgp_response, re.MULTILINE)
+        neighbors_list_section = []
+        neighbors_len = len(neighbors)
+        for neighbor in neighbors:
+            n_index = neighbors.index(neighbor)
+            neighbor_start = bgp_response.index('Peer  : {}'.format(neighbor))
+            section = bgp_response[neighbor_start:]
+            if (n_index + 1) == neighbors_len:
+                neighbor_sect = section
+            else:
+                neighbor_end = section.index('Peer  : ', 2)
+                neighbor_sect = section[:neighbor_end]
+            neighbors_list_section.append(neighbor_sect)
+        return neighbors_list_section
+
+    def _bgp_group_parms(self, bgp_groups_list):
+        bgp_groups_parms = {}
+        for bgp_group in bgp_groups_list:
+            r_group = self._search_func('Group\s+:\s(.*)',
+                                        bgp_group, '').rstrip()
+            gr_type = self._search_func('Group Type\s+:\s(.*)',
+                                        bgp_group, '')
+            desc = self._search_func('Description\s+:\s(.*)', bgp_group, '')
+            multihop = self._search_func('Multihop\s+:\s(\d+)', bgp_group, int)
+            multipath = self._search_func('Multipath\s+:\s(\d+)', bgp_group, False)
+            im_pol = self._search_func('Import Policy\s+:\s(.*)', bgp_group, '')
+            ex_pol = self._search_func('Export Policy\s+:\s(.*)', bgp_group, '')
+            loc_add = self._search_func('Local Address\s+:\s(\d+.\d+.\d+.\d+)',
+                                        bgp_group, '')
+            loc_as = self._search_func('Local AS\s+:\s(\S+)', bgp_group, int)
+            peer_as = self._search_func('Peer AS\s+:\s(\S+)', bgp_group, int)
+            remove_private_as = self._search_func('Remove Private\s+:\s(\S+)',
+                                                  bgp_group, False)
+            if remove_private_as:
+                remove_private_as = True
+            prefix_l = self._search_func('Prefix Limit\s+:\s(\S+)',
+                                         bgp_group, dict)
+            bgp_groups_parms[r_group] = {
+                'description': desc,
+                'type': gr_type,
+                'multihop_ttl': multihop,
+                'multipath': multipath,
+                'import_policy': im_pol,
+                'export_policy': ex_pol,
+                'local_address': loc_add,
+                'local_as': loc_as,
+                'remote_as': peer_as,
+                'remove_private_as': remove_private_as,
+                'prefix_limit': prefix_l,
+                }
+        return bgp_groups_parms
+
+    def _get_bgp_group_section(self, bgp_group_response):
+        g_groups = re.findall('^Group\s+:\s(.*)',
+                            bgp_group_response, re.MULTILINE)
+        groups = [group.rstrip() for group in g_groups]
+        group_list_section = []
+        groups_len = len(groups)
+        for group in groups:
+            g_index = groups.index(group)
+            g_search = re.search(r'(Group[ ]{{12}}: {})'.format(group),
+                               bgp_group_response).group(1)
+            group_start = bgp_group_response.index(g_search)
+            section = bgp_group_response[group_start:]
+            if (g_index + 1) == groups_len:
+                group_sect = section
+            else:
+                group_end = section.index(': {}'.format(groups[g_index +1]))
+                group_sect = section[:group_end]
+            group_list_section.append(group_sect)
+        return group_list_section
+
+    def _search_func(self, search_for, search_in, option=None):
+        try:
+            ser_object = re.search('{}'.format(search_for), search_in).group(1)
+        except Exception:
+            if option:
+                ser_object = option
+            else:
+                ser_object = False
+        return ser_object
 
     def check_file_exists(self, dest_file):
         self.device.send("\n/environment no more\n")
