@@ -65,7 +65,7 @@ class SROSDriver(object):
             iface_name = re.search(r'^(.{1,32})', iface).group(1)
             admin_status = re.search(r'.{33}(\w+)', iface).group(1)
             ipv4_status = re.search(r'.{33}(\w+)', iface).group(1)
-            ipv6_status = re.search(r'.{33}\w+/(\w+)', iface).group(1)
+            ipv6_status = re.search(r'.{43}\w+/(\w+)', iface).group(1)
             mode = re.search(r'.{55}(\w+)', iface).group(1)
             link_to = re.search(r'.{63}(\.+)', iface).group(1)
             try:
