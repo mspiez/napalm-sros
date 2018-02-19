@@ -58,30 +58,21 @@ class SROSDriver(object):
         self.device.send('/show router interface exclude-services\n')
         time.sleep(1)
         output = self.device.recv(65535)
-        output = output.split('exclude-services')
-        interfaces_split = re.split('--------+', output[1])
-        all_int = re.split('(\w.*\n.*)\n', interfaces_split[1])
-        int_list = []
-        for interface in all_int:
-            if interface != '\n' and interface != '' and interface != '\r\n':
-                int_list.append(interface)
+        ifaces_split = re.split('----+', output)
+        all_ifaces = re.findall(r'^(\w.*[\r|\n]+.*)', ifaces_split[1], re.MULTILINE)
         interface_facts = {}
-        for interface in int_list:
-            interface_name = re.search('(^\S+)', interface).group(1)
-            admin_status = re.search(' +(\w+)', interface).group(1)
-            ipv4_status = re.search(' +\w+ +(\w+)/\S+', interface).group(1)
-            ipv6_status = re.search(' +\w+ +\w+/(\S+)', interface).group(1)
+        for iface in all_ifaces:
+            iface_name = re.search(r'^(.{1,32})', iface).group(1)
+            admin_status = re.search(r'.{33}(\w+)', iface).group(1)
+            ipv4_status = re.search(r'.{33}(\w+)', iface).group(1)
+            ipv6_status = re.search(r'.{33}\w+/(\w+)', iface).group(1)
+            mode = re.search(r'.{55}(\w+)', iface).group(1)
+            link_to = re.search(r'.{63}(\.+)', iface).group(1)
             try:
-                mode = re.search(' +\w+/\S+ +(\w+) ', interface).group(1)
+                ip = re.search(r'\s+(\d+.\d+.\d+.\d+/\d+)', iface, re.MULTILINE).group(1)
             except AttributeError:
-                mode = ''
-            link_to = re.search(' +\w+/\S+ +\w+ +(\S+)\r\n', interface).group(1)
-            try:
-                ip = re.search('\n\s+(\d+.\d+.\d+.\d+/\d+)', interface).group(1)
-            except AttributeError:
-                ip = ''
-            link_to = re.search(' +\w+/\S+ +\w+ +(\S+)\r\n', interface).group(1)
-            interface_facts.update({interface_name: {
+                ip = False
+            interface_facts.update({iface_name: {
                                 'admin_status': admin_status,
                                 'ipv4_status': ipv4_status,
                                 'ipv6_status': ipv6_status,
@@ -93,30 +84,31 @@ class SROSDriver(object):
         return interface_facts
 
     def get_facts(self):
-        sys_name = "/show system information | match \"System Name\"\n"
-        sys_type = "/show system information | match \"System Type\"\n"
-        serial = "/show chassis\n/show chassis detail\n"
-        sys_version = "/show system information | match \"System Version\"\n"
-        sys_uptime = "/show system information | match \"System Up Time\"\n"
-        self.device.send("\n/environment no more\n")
+        sys_info = '/show system information'
+        sys_name = '{} | match "System Name"\n'.format(sys_info)
+        sys_type = '{} | match "System Type"\n'.format(sys_info)
+        serial = '/show chassis\n/show chassis detail\n'
+        sys_version = '{} | match "System Version"\n'.format(sys_info)
+        sys_uptime = '{} | match "System Up Time"\n'.format(sys_info)
+        self.device.send('\n/environment no more\n')
         time.sleep(1)
         self.device.send(sys_name + sys_type + serial + sys_version + sys_uptime)
         time.sleep(1)
         output = self.device.recv(65535)
-        hostname = re.search('System Name +: (.*)\r\n', output).group(1)
+        hostname = re.search(r'System Name +: (.*)[\r|\n]+', output).group(1)
         try:
-            model = re.search('System Type +: (.*)\r\n', output).group(1)
+            model = re.search(r'System Type +: (.*)[\r|\n]+', output).group(1)
         except AttributeError:
-            model = ''
+            model = False
         try:
-            serial_number = re.search('Serial number +: (.*)\r\n', output).group(1)
+            serial_number = re.search(r'Serial number +: (.*)[\r|\n]+', output).group(1)
         except AttributeError:
-            serial_number = ''
-        os_version = re.search('System Version +: (.*)\r\n', output).group(1)
+            serial_number = False
+        os_version = re.search(r'System Version +: (.*)[\r|\n]+', output).group(1)
         try:
-            uptime = re.search('System Up Time +: (.*) \(', output).group(1)
+            uptime = re.search(r'System Up Time +: (.*) \(', output).group(1)
         except AttributeError:
-            uptime = ''
+            uptime = False
         return {
             'vendor': 'Nokia',
             'model': model,
