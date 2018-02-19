@@ -59,28 +59,27 @@ class SROSDriver(object):
         time.sleep(1)
         output = self.device.recv(65535)
         ifaces_split = re.split('----+', output)
-        all_ifaces = re.findall(r'^(\w.*[\r|\n]+.*)', ifaces_split[1], re.MULTILINE)
+        all_ifaces = re.findall(r'^(\w.*[\r\n]+.*)', ifaces_split[1], re.MULTILINE)
         interface_facts = {}
         for iface in all_ifaces:
             iface_name = re.search(r'^(.{1,32})', iface).group(1)
             admin_status = re.search(r'.{33}(\w+)', iface).group(1)
-            ipv4_status = re.search(r'.{33}(\w+)', iface).group(1)
+            ipv4_status = re.search(r'.{43}(\w+)', iface).group(1)
             ipv6_status = re.search(r'.{43}\w+/(\w+)', iface).group(1)
             mode = re.search(r'.{55}(\w+)', iface).group(1)
-            link_to = re.search(r'.{63}(\.+)', iface).group(1)
+            link_to = re.search(r'.{63}(.+)[\r\n]+', iface).group(1)
             try:
                 ip = re.search(r'\s+(\d+.\d+.\d+.\d+/\d+)', iface, re.MULTILINE).group(1)
             except AttributeError:
                 ip = False
-            interface_facts.update({iface_name: {
+            interface_facts.update({iface_name.rstrip(): {
                                 'admin_status': admin_status,
                                 'ipv4_status': ipv4_status,
                                 'ipv6_status': ipv6_status,
                                 'mode': mode,
                                 'ip': ip,
-                                'link_to': link_to
-                                }
-                            })
+                                'link_to': link_to.rstrip()
+                                }})
         return interface_facts
 
     def get_facts(self):
@@ -95,44 +94,46 @@ class SROSDriver(object):
         self.device.send(sys_name + sys_type + serial + sys_version + sys_uptime)
         time.sleep(1)
         output = self.device.recv(65535)
-        hostname = re.search(r'System Name +: (.*)[\r|\n]+', output).group(1)
+        hostname = re.search(r'System Name +: (.*)', output).group(1)
         try:
-            model = re.search(r'System Type +: (.*)[\r|\n]+', output).group(1)
+            model = re.search(r'System Type +: (.*)', output).group(1)
         except AttributeError:
             model = False
         try:
-            serial_number = re.search(r'Serial number +: (.*)[\r|\n]+', output).group(1)
+            serial_number = re.search(r'Serial number +: (.*)', output).group(1)
         except AttributeError:
             serial_number = False
-        os_version = re.search(r'System Version +: (.*)[\r|\n]+', output).group(1)
+        os_version = re.search(r'System Version +: (.*)', output).group(1)
         try:
             uptime = re.search(r'System Up Time +: (.*) \(', output).group(1)
         except AttributeError:
             uptime = False
         return {
             'vendor': 'Nokia',
-            'model': model,
-            'serial_number': serial_number,
-            'os_version': os_version,
-            'hostname': hostname,
-            'fqdn': hostname,
+            'model': model.rstrip(),
+            'serial_number': serial_number.rstrip(),
+            'os_version': os_version.rstrip(),
+            'hostname': hostname.rstrip(),
+            'fqdn': hostname.rstrip(),
             'uptime': uptime,
             'interface': self.get_interfaces().keys()
             }
 
     def get_arp_table(self):
         self.device.send("/environment no more\n")
+        time.sleep(1)
         self.device.send("/show router arp\n")
+        time.sleep(1)
         output = self.device.recv(65535)
         arp_output = output.splitlines()
         arp_table = []
         for arp_entry in arp_output:
-            arp_search = re.search('^(\d+.\d+.\d+.\d+)\s+(\S+)\s+(\S+)' \
+            arp_search = re.search('^(\d+.\d+.\d+.\d+)\s+(\S+)\s+(\S+)'
                             '\s+(\S+)\s+(.*)', arp_entry)
             try:
                 ip = arp_search.group(1)
                 mac = arp_search.group(2)
-                age = float(arp_search.group(3))
+                age = 0
                 iface = arp_search.group(5)
             except Exception as f:
                 pass
@@ -352,3 +353,4 @@ class SROSDriver(object):
         return output
 
     
+
