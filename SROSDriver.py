@@ -1,5 +1,6 @@
 #!/usr/bin/env python
 
+import datetime
 import os
 import re
 import paramiko
@@ -146,9 +147,9 @@ class SROSDriver(object):
     def get_bgp_config(self, group='', neighbor=''):
         self.command("/environment no more\n")
         bgp_response = self.command("/show router bgp neighbor\n")
-        bgp_gr_response = self.command("/show router bgp group\n")
         neigh_list_section = self._get_bgp_neighbors_section(bgp_response)
         bgp_n_parms = self._bgp_neighbors_parms(neigh_list_section)
+        bgp_gr_response = self.command("/show router bgp group\n")
         gr_list_section = self._get_bgp_group_section(bgp_gr_response)
         bgp_gr_parms = self._bgp_group_parms(gr_list_section)
         for bgp_gr in bgp_gr_parms.keys():
@@ -206,7 +207,7 @@ class SROSDriver(object):
         neighbors_len = len(neighbors)
         for neighbor in neighbors:
             n_index = neighbors.index(neighbor)
-            n_search = re.search(r'(Peer[ ]{{4,17}}: {})'.format(neighbor),
+            n_search = re.search(r'(Peer[ ]{{1,17}}: {})'.format(neighbor),
                                  bgp_response).group(1)
             neighbor_start = bgp_response.index(n_search)
             section = bgp_response[neighbor_start:]
@@ -263,7 +264,7 @@ class SROSDriver(object):
         groups_len = len(groups)
         for group in groups:
             g_index = groups.index(group)
-            g_search = re.search(r'(Group[ ]{{4,12}}: {})'.format(group),
+            g_search = re.search(r'(Group[ ]{{1,12}}: {})'.format(group),
                                bgp_group_response).group(1)
             group_start = bgp_group_response.index(g_search)
             section = bgp_group_response[group_start:]
@@ -274,6 +275,18 @@ class SROSDriver(object):
                 group_sect = section[:group_end]
             group_list_section.append(group_sect)
         return group_list_section
+
+    def get_bgp_neighbors(self, vrf=None):
+        self.command("/environment no more\n")
+        bgp_response = self.command("/show router bgp summary\n")
+        if vrf and type(vrf) == int:
+            bgp_response = self.command('/show router {} '
+                                        'bgp neighbor\n'.format(vrf))
+        if bgp_response:
+            neigh_list_section = self._get_bgp_neighbors_section(bgp_response)
+            bgp_n_parms = self._bgp_neighbors_parms(neigh_list_section)
+
+
 
     def _search_func(self, search_for, search_in, option=None):
         try:
