@@ -25,7 +25,7 @@ Output from SROS for get_bgp_neighbors():
     "is_up": true, 
     "bgp_state": "Established", 
     "remote_id": "1.1.1.16", 
-    "local_as": "719", 
+    "local_as": "100", 
     "address_family": {
         "VpnIPv4": {
             "sent_prefixes": "59", 
