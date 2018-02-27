@@ -1,4 +1,4 @@
-# get_facts()
+### get_facts()
 
 Output from SROS for get_facts():
 
