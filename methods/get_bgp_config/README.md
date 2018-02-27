@@ -48,12 +48,12 @@ Output from SROS for get_bgp_config():
 {
     "export_policy": "None Specified / Inherited", 
     "description": "(Not Specified)", 
-    "local_as": "719", 
+    "local_as": "100", 
     "route_reflector_client": true, 
     "nhs": false, 
     "prefix_limit": false, 
     "bgp_group": "RR_vpn_ipv4", 
-    "remote_as": "719", 
+    "remote_as": "100", 
     "import_policy": "None Specified / Inherited", 
     "local_address": "1.1.1.17", 
     "authentication_key": "n/a"
