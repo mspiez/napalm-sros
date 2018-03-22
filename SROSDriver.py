@@ -36,7 +36,7 @@ class SROSDriver(object):
 
     def command(self, cmd):
         self.device.send('/environment no more\n')
-        self.device.send(cmd)
+        self.device.send('{}\n'.format(cmd))
         time.sleep(1)
         return self.device.recv(65535)
 
